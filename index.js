@@ -52,7 +52,7 @@ app.get('/api/getI',function(req,res){
     //data = data.split(';');
     //data = JSON.parse(String(data));
     //console.log(data);
-    res.json({'dat': data});
+    res.json({'dat': "sds"});
 });
 
 
