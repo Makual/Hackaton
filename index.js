@@ -6,6 +6,8 @@ var app = express();
 var path = require('path');
 var bodyParser = require('body-parser');
 var cheerio = require('cheerio');
+var {JsonDB} = require('node-json-db');
+var {Config} = require('node-json-db/dist/lib/JsonDBConfig');
 
 var cors = require('cors');
 
@@ -22,11 +24,23 @@ app.get('/api/events', function(req,res){
     res.json(events);
 });
 */
+var db = new JsonDB(new Config("myDataBase", true, false, '/'));
 
 app.post('/api/registration',function(req,res){
     console.log(req.body);
+    db.push("/test1", req.body, true);
     res.send('Reg succsesful');
-})
+});
+
+app.get('/api/getI',function(req,res){
+    var data=  db.getData('/test1');
+    res.json(data);
+});
+
+
+
+
+
 
 /*
 needle.get('https://events.educom.ru/calendar',function(err,res){
