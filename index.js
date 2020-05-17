@@ -34,12 +34,15 @@ app.post('/api/registration',function(req,res){
 app.post('/api/login',function(req,res){
     var data = db.getData("/users/reg/"+req.body.email);
     if (data.password == req.body.password){
-        res.send('Log succsesful');
+        res.send(String(Math.round(Math.random()*100000000))+String(Math.round(Math.random()*100000000))+String(Math.round(Math.random()*100000000))+String(Math.round(Math.random()*100000000))+String(Math.round(Math.random()*100000000)));
     }
     else{
         res.send('Incorect password');
     }
 });
+
+
+
 
 
 app.get('/api/getI',function(req,res){
