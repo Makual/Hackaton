@@ -48,7 +48,7 @@ app.post('/api/login',function(req,res){
 
 
 app.get('/api/getI',function(req,res){
-    var data =  db.getData('/users/log/1@1.ru');
+    var data = req.cookies;
     res.json(data);
 });
 
