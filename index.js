@@ -48,8 +48,11 @@ app.post('/api/login',function(req,res){
 
 
 app.get('/api/getI',function(req,res){
-    var data = req;
-    res.json(data);
+    var data = req.headers.cookie;
+    //data = data.split(';');
+    //data = JSON.parse(String(data));
+    console.log(data);
+    res.send(data);
 });
 
 
