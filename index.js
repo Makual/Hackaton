@@ -48,7 +48,7 @@ app.post('/api/login',function(req,res){
 
 
 app.get('/api/getI',function(req,res){
-    var data = req.header.cookie;
+    var data = req;
     res.json(data);
 });
 
