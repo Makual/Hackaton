@@ -51,7 +51,7 @@ app.get('/api/getI',function(req,res){
     var data = req.headers.cookie;
     //data = data.split(';');
     //data = JSON.parse(String(data));
-    console.log(data);
+    //console.log(data);
     res.send(data);
 });
 
