@@ -15,10 +15,7 @@ app.use(bodyParser.json());
 
 app.use(express.static(path.join(__dirname, "public")));
 
-app.get('/api/ABOUT', function(req, res){
-    res.('index.html');
-    res.
-});
+
 
 app.get('/api/events', function(req,res){
     let events = [{date: '2020-05-16', name: 'today'},{date: '2020-05-17', name: 'tommorow'}];
