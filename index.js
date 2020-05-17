@@ -28,12 +28,12 @@ var db = new JsonDB(new Config("myDataBase", true, false, '/'));
 
 app.post('/api/registration',function(req,res){
     console.log(req.body);
-    db.push("/test1", req.body, true);
+    db.push("/users/reg/"+req.body.email, req.body, true);
     res.send('Reg succsesful');
 });
 
 app.get('/api/getI',function(req,res){
-    var data=  db.getData('/test1');
+    var data =  db.getData('/users/reg/1@1.ru');
     res.json(data);
 });
 
