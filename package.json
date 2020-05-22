@@ -13,9 +13,12 @@
     "cheerio": "^1.0.0-rc.3",
     "cors": "^2.8.5",
     "express": "^4.17.1",
+    "fetch": "^1.1.0",
     "mongod": "^2.0.0",
     "mongodb": "^3.5.7",
     "needle": "^2.4.1",
-    "node-json-db": "^1.1.0"
+    "node-fetch": "^2.6.0",
+    "node-json-db": "^1.1.0",
+    "nodemailer": "^6.4.6"
   }
 }
