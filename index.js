@@ -11,6 +11,8 @@ var {Config} = require('node-json-db/dist/lib/JsonDBConfig');
 var cors = require('cors');
 const fetch = require('node-fetch');
 const nodemailer = require('nodemailer');
+var crypto = require('crypto');
+
 
 let transporter = nodemailer.createTransport({ //Создание почтового бота
     service: 'gmail',
@@ -20,13 +22,13 @@ let transporter = nodemailer.createTransport({ //Создание почтово
     }
 })
 
-
-
 app.use(cors());
 
 app.use(express.json());
 
 app.use(express.static(path.join(__dirname, "public")));
+
+
 
 function deleteRep(arr) { // Функция удаления дубликатов объектов
     var newArr = [];
@@ -45,7 +47,8 @@ function deleteRep(arr) { // Функция удаления дубликато�
     }
     return newArr;
 }
-function deleteRepArr(arr) {//Функция удаления дубликатов в массиве
+
+function deleteRepArr(arr) { //Функция удаления дубликатов в массиве
     var newArr = [];
     counter = 0;
     for (var i in arr){
@@ -63,17 +66,100 @@ function deleteRepArr(arr) {//Функция удаления дубликато
     return newArr;
 }
 
+function keyGen(){ //Генератор SessionID
+    token = crypto.randomBytes(64).toString('hex');
+    return token;
+}
 
-var db = new JsonDB(new Config("userData", true, false, '/')); //Создание базы данных
-var db2 = new JsonDB(new Config("parseData", true, false, '/'));
+function sessionTest(key,email){ //Проверка SessionID
+    data = db4.getData('/users');
+    return (data[email] == key)
+}
+
+function getStudents(data){ //Получение списка учеников определенного учителя
+    school = data.school;
+    class_number = data.class_number;
+    simvol = data.simvol;
+    allData = db.getData('/users/reg');
+    result = []
+    for (i in allData){
+        if ((allData[i].school == school) && (allData[i].class_number == class_number) && (allData[i].simvol == simvol) && (allData[i].role == 'student')){
+            result.push(allData[i])
+        }
+    }
+    result.sort();
+    return result;
+}
+
+function getTeachers(data){ //Получение списка учителей админом школы
+    school = data.school;
+    allData = db.getData('/users/reg');
+    result = []
+    for (i in allData){
+        if ((allData[i].school == school) && (allData[i].role == 'teacher')){
+            result.push(allData[i])
+        }
+    }
+    result.sort();
+    return result;
+}
+
+function tableUpdate(data,email){ //Обновление данных полученных из таблицы
+    teacherData = db.getData('/users/reg/'+email);
+    counter = false;
+    allData = db.getData('/users/reg');
+    for (i in allData){ //Удаление лишних учеников
+        for (count in data){
+            if ((allData[i].role == "student") && (allData[i].school == db.getData('/users/reg/'+email).school) && (allData[i].class_number == db.getData('/users/reg/'+email).class_number) && (allData[i].simvol == db.getData('/users/reg/'+email).simvol)){
+                if ((allData[i].email == data[count].email) && (allData[i].school == teacherData.school) && (allData[i].class_number == teacherData.class_number) && (allData[i].simvol == teacherData.simvol)){
+                    counter = true;
+                }
+            }
+        }
+        if (counter){
+            allData[i].role = 'user';
+        }
+    }
+
+    counter = 0;
+    
+    for (count in data){ 
+        for (i in allData){
+            if (data[count].email == allData[i].email){
+                allData[i].school = teacherData.school;
+                allData[i].class_number = teacherData.class_number;
+                allData[i].simvol = teacherData.simvol;
+                allData[i].name = data[count].name;
+                allData[i].surname = data[count].surname;
+                allData[i].role = "student";
+                counter++;
+            }
+        }
+        if (counter == 0){
+
+            return ('Данная почта не найдена: ' + String(data[count].email))
+        }
+        counter = 0;
+    }
+    db.push('/users/reg',allData)
+    return ('OK')
+}
+
+
+
+var db = new JsonDB(new Config("userData", true, false, '/')); //БД основных данных пользователей
+var db2 = new JsonDB(new Config("parseData", true, false, '/')); //БД отпаршенных сайтов
+var db3 = new JsonDB(new Config("userEvents", true, false, '/')); //БД отмеченных мероприятий пользователей
+var db4 = new JsonDB(new Config("SessionKeys", true, false, '/')); //БД ключей залогиненых пользователей
 
 
 
 app.post('/api/registration',function(req,res){ //Получение данных с регистрации
-    result = {checkedEvents: [],friends: [],statNumber: -1}
+    result = {friends: [],statNumber: -1}
     result = Object.assign(result,req.body);
     all = db.getData('/users/reg');
 
+    db3.push('/users/'+req.body.email,{checkedEvents: []})
 
     if (all[req.body.email] == undefined){
         db.push("/users/reg/"+req.body.email, result, true);
@@ -87,7 +173,27 @@ app.post('/api/registration',function(req,res){ //Получение данны�
 app.post('/api/login',function(req,res){ //Получение данных с логина и отправка обратно SessionID
     var data = db.getData("/users/reg/"+req.body.email);
     if (data.password == req.body.password){
-        res.send('Correct password');
+        keyData = db4.getData('/users');
+        if ((keyData[req.body.email] != undefined) || (keyData[req.body.email] != '-')){
+            key = keyGen();
+            db4.push('/users/'+req.body.email,key);
+            db4.push('/counters/'+req.body.email,5);
+        }
+        else{
+            key = keyData[req.body.email];
+        }
+        console.log(key)
+        res.send(key);
+    }
+    else{
+        res.send('Incorect password');
+    }
+});
+
+app.post('/api/adminLogin',function(req,res){ //Получение данных с логина и отправка обратно SessionID
+    var data = db.getData("/users/reg/"+req.body.email);
+    if (data.password == req.body.password){
+        res.send('OK')
     }
     else{
         res.send('Incorect password');
@@ -106,19 +212,29 @@ app.get('/api/getAllEvents',function(req,res){ //Отдача всех меро�
 
 app.post('/api/checkedEventsUpdate',function(req,res){ //Сохранение отмеченных мероприятий пользователя
     email = req.body.email;
+    if (sessionTest(req.body.sessionid,email)){
+        result = db3.getData('/users/'+email+'/checkedEvents');
 
-    result = db.getData('/users/reg/'+email+'/checkedEvents');
-    result = result.concat(req.body.events);
-    result = deleteRep(result)
-
-    db.push('/users/reg/'+email+'/checkedEvents',result);
-    res.send('Save succsesful')  
+        result = result.concat(req.body.events);
+        result = deleteRep(result)
+    
+        db3.push('/users/'+email+'/checkedEvents',result);
+        res.send('Save succsesful') 
+    }
+    else{
+        res.send("310")
+    }
 });
 
 app.get('/api/getCheckedEvents',function(req,res){ //Отдача отмеченных мероприятий
     email = req.headers.email;
-    chEvents = db.getData('/users/reg/'+email+'/checkedEvents');
-    res.json(chEvents);
+    if (sessionTest(req.headers.sessionid,email)){
+        chEvents = db3.getData('/users/'+email+'/checkedEvents');
+        res.json(chEvents);
+    }
+    else{
+        res.send("310")
+    }
 });
 
 app.post('/api/mailCheck',function(req,res){ //Отправка на почту кода с подтверждением
@@ -133,100 +249,144 @@ app.post('/api/mailCheck',function(req,res){ //Отправка на почту 
     })
 });
 
-app.get('/api/getInformation',function(req,res){//Получение статистики пользователя 
+app.get('/api/getInformation',function(req,res){ //Получение статистики пользователя 
     email = req.headers.email;
-    inform = db.getData('/users/reg/'+email);
-    res.json(inform);
+    if (sessionTest(req.headers.sessionid,email)){
+        inform = db.getData('/users/reg/'+email);
+        res.json(inform);
+    }
+    else{
+        res.send("310")
+    }
 });
 
-app.post('/api/updateInformation',function(req,res){//Обновление статистики пользователя 
+app.post('/api/updateInformation',function(req,res){ //Обновление статистики пользователя 
     email = req.body.email;
-    
-    inform = db.getData('/users/reg/'+email);
+    if (sessionTest(req.body.sessionid,email)){
+        inform = db.getData('/users/reg/'+email);
 
-    inform = Object.assign(inform,req.body.update);
+        inform = Object.assign(inform,req.body.update);
 
-    db.push('/users/reg/'+email,inform);
+        console.log(inform)
+        db.push('/users/reg/'+email,inform);
 
-    res.send(inform)  
+        res.send(inform)  
+    }
+    else{
+        res.send("310")
+    }
 });
 
-app.get('/api/getOtherInformation',function(req,res){//Получение чужой информации учителем или директором
-    email = req.headers.email;
-
-    stat = db.getData('/users/reg/'+email);
-    roleS = stat.role;
-    schoolS = stat.school;
-    allS = db.getData('/users/reg');
-    result = [[],[],[],[],[],[],[],[],[],[],[]]
-    classS = stat.class_number;
-    symS = stat.simvol;
-    
-    
-    if (roleS == 'директор'){
-        for (var key in allS){
-            if ((allS[key].role == 'ученик') && (allS[key].school == schoolS)){
-                result[Number(allS[key].class_number)-1].push(allS[key]);
-            }
-        }
-        result = {role: 'директор',data: result};
-    }
-    if (roleS == 'учитель'){
-        console.log(roleS,schoolS)
-        for (var key in allS){
-            if ((allS[key].role == 'ученик') && (allS[key].school == schoolS) && (allS[key].class_number == classS) && (allS[key].simvol == symS)){
-                result[Number(allS[key].class_number)-1].push(allS[key]);
-            }
-        }
-        result = {role: 'учитель',data: result};
-    }
-    
-    res.json(result);
-});
-
-app.post('/api/addFriendCode',function(req,res){//Добавление кода друга
+app.post('/api/addFriendCode',function(req,res){ //Добавление кода друга
     email = req.body.email;
-    code = req.body.statNumber;
-    console.log(req.body);
-    allS = db.getData('/users/reg');
-    counter = 0;
+    if (sessionTest(req.body.sessionid,email)){
+        code = req.body.statNumber;
 
-    for (var key in allS){
-        if (allS[key].statNumber == code){
-            fr = db.getData('/users/reg/'+email+'/friends');
-            fr = fr.concat(allS[key].statNumber);
-            fr = deleteRepArr(fr);
-            db.push('/users/reg/'+email+'/friends',fr);
-            res.send('Save successful');
-            counter++;
-        }
-    }
+        allS = db.getData('/users/reg');
+        counter = 0;
 
-    if (counter == 0){
-        res.send('Code not found');
-    }
-});
-
-app.get('/api/getCodeInformation',function(req,res){//Получение статистики друзей
-    email = req.headers.email;
-    
-    allS = db.getData('/users/reg');
-    fr = db.getData('/users/reg/'+email).friends;
-    result = [];
-    for (var i in fr){
-        code = fr[i];
-        for (var key in allS){
-            if (allS[key].statNumber == code){
-                result.push(allS[key]);
+        if (allS[email].statNumber != undefined){
+            if (allS[email].statNumber != code){
+                for (var key in allS){
+                    if (allS[key].statNumber == code){
+                        fr = db.getData('/users/reg/'+email+'/friends');
+                        fr = fr.concat(allS[key].statNumber);
+                        fr = deleteRepArr(fr);
+                        db.push('/users/reg/'+email+'/friends',fr);
+                        res.send('Save successful');
+                        counter++;
+                    }
+                }
             }
         }
+
+        if (counter == 0){
+            res.send('Code not found');
+        }
     }
-    res.json(result);
+    else{
+        res.send("310")
+    }
+});
+
+app.get('/api/getCodeInformation',function(req,res){ //Получение статистики друзей
+    email = req.headers.email;
+    if (sessionTest(req.headers.sessionid,email)){
+        allS = db.getData('/users/reg');
+        
+        fr = db.getData('/users/reg/'+email).friends;
+        result = [];
+        for (var i in fr){
+            code = fr[i];
+            for (var key in allS){
+                if (allS[key].statNumber == code){
+                    cEvents = db3.getData('/users/'+allS[key].email+'/checkedEvents');
+                    allS[key].checkedEvents = cEvents;
+                    result.push(allS[key]);
+                }
+            }
+        }
+        res.json(result);
+    }
+    else{
+        res.send("310")
+    }
+});
+
+app.post('/api/deleteEvent',function(req,res){ //Удаление мероприятия
+    email = req.body.email;
+    if (sessionTest(req.body.sessionid,email)){
+        eventi = req.body.event;
+        events = db3.getData('/users/'+email).checkedEvents;
+
+        for (key in events){
+            if((events[key].name == eventi.name) && (events[key].link == eventi.link)){
+                events.splice(key,1);
+            }
+        }
+        db3.push('/users/'+email+'/checkedEventssa',events);
+        res.send('Delete sucsessful');
+    }
+    else{
+        res.send("310")
+    }
+});
+
+app.post('/api/getAdminList',function(req,res){ //Получение определенных списков пользователей из админ-панели
+    email = req.body.email;
+    allData = db.getData('/users/reg/'+email);
+    if (allData.role == 'teacher'){
+        list = getStudents(allData);
+    }
+    if (allData.role == 'school_admin'){
+        list = getTeachers(allData);
+    }
+    res.send(list);
+});
+
+app.post('/api/uploadTable',function(req,res){ //Обновление данных загруженных из таблицы
+    res.send(tableUpdate(req.body.data,req.body.email));
 });
 
 
-let parseTime = 10000; //Таймер парсера
-setInterval(function() { //Парсинг сайтов
+
+
+let sessionidTimer = 86400000; //Таймер ключей‬
+setInterval(function(){ //Уменьшение счетчика ключей
+    allTimers = db4.getData('/counters');
+    for (i in allTimers){
+        allTimers[i] = allTimers[i] - 1;
+        if (allTimers[i] == 0){
+            db4.push('/users/'+i,'-')
+        }
+    }
+
+
+}, sessionidTimer);
+
+let parseTime = 60000; //Таймер парсера
+setInterval(function(){ //Парсинг сайтов
+    
     var url1 = 'https://events.mosedu.ru/';
     var url2 = 'https://events.educom.ru/calendar?onlyActual=false&pageNumber=1&search=&portalIds=14'
     var url3 = 'https://events.educom.ru/calendar?onlyActual=false&pageNumber=1&search=&portalIds=21'
@@ -235,11 +395,13 @@ setInterval(function() { //Парсинг сайтов
     var url6 = 'https://vuzopedia.ru/region/city/59?page=2'
     var url7 = 'https://vuzopedia.ru/region/city/59?page=3'
 
+    
     db2.push('/events/allEvents/it',[],true); //Обнуление базы данных для it
     db2.push('/events/allEvents/med',[],true); //Обнуление базы данных для it
     db2.push('/events/allEvents/inj',[],true); //Обнуление базы данных для it
     db2.push('/events/allEvents/points',[],true);
 
+    
     fetch(url1, { 
         method: 'get'
     })
@@ -687,14 +849,9 @@ fetch(url7, {
     console.log(err)
 })
 
-
-
-
-
 }, parseTime);
 
-
-let mailingTime = 1000000 //Таймер рассылки напоминаний
+let mailingTime = 3600000; //Таймер рассылки напоминаний
 setInterval(function(){ //Напоминание о мероприятиях
     users = db.getData('/users/reg');
     var date = new Date();
@@ -703,7 +860,7 @@ setInterval(function(){ //Напоминание о мероприятиях
     
     for (var key in users){
         for (var i in users[key].checkedEvents){
-            if (((time - Number(users[key].checkedEvents[i].time.slice(0,2))) == 1) && (Number(users[key].checkedEvents[i].date.slice(0,2)) == date)){
+            if (((Number(users[key].checkedEvents[i].time.slice(0,2) - time)) == 1) && (Number(users[key].checkedEvents[i].date.slice(0,2)) == date)){
                 transporter.sendMail({
                     from: '"no-reply_ProfEvents" <noreplyprofevents@gmail.com>',
                     to: users[key].email,
@@ -717,11 +874,6 @@ setInterval(function(){ //Напоминание о мероприятиях
 }, mailingTime);
 
 
-
-app.get('/api/getI',function(req,res){ //Получение тестовой информации
-    var data = db2.getData('/events/allEvents');
-    res.send(data);
-});
 
 
 app.listen(3000, function(){
